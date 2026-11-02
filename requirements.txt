@@ -1,0 +1,5 @@
+# 기본 패키지: 앱 화면과 소리 받기 (설치.bat 이 설치)
+PySide6-Essentials
+soundcard
+numpy
+requests

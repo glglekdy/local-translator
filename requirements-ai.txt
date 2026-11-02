@@ -1,0 +1,7 @@
+# AI 라이브러리: 앱의 '다운로드' 화면이 설치 (PyTorch CUDA 판은 그 전에 따로 설치)
+qwen-asr
+faster-whisper
+hf_xet
+# GPU(NVIDIA) 음성인식용 CUDA 라이브러리 (Whisper 용)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12>=9,<10

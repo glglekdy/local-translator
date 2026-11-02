@@ -1,0 +1,8 @@
+# API 키 등 개인 설정
+config.json
+# 업데이트 때 남기는 이전 파일
+.update_backup/
+__pycache__/
+.pytest_cache/
+# 업데이트 뒤 다음 실행 때 패키지를 맞추라는 표시
+.sync_requirements
