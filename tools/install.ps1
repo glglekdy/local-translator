@@ -48,7 +48,7 @@ function Native([string]$Exe, [string[]]$ArgList) {
     }
 }
 function Check($what) {
-    if ($LASTEXITCODE -ne 0) { Fail "$what 에 실패했어요 (코드 $LASTEXITCODE). 인터넷 연결을 확인하고 다시 실행해 주세요" }
+    if ($LASTEXITCODE -ne 0) { Fail "$($what)에 실패했어요 (코드 $LASTEXITCODE). 인터넷 연결을 확인하고 다시 실행해 주세요" }
 }
 
 if ($LogFile) { Set-Content -Path $LogFile -Value "$AppName 설치 기록 $(Get-Date -Format s)" -Encoding UTF8 }

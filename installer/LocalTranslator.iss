@@ -43,6 +43,10 @@ WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
+; Inno Setup 6.7 부터 기본으로 켜는 RedirectionGuard 는 일반 사용자가 만든 폴더 링크(junction)를 막는다.
+; 설치 마지막에 uv 가 Python 을 설치하며 그런 링크를 만들고 쓰므로 끈다 (제거할 때 그 링크를 지우는 데도 필요).
+; 관리자 권한으로 도는 설치 프로그램을 노린 공격을 막는 기능이라, 사용자 권한으로만 도는 이 설치에는 해당 없음
+RedirectionGuard=no
 LicenseFile={#Stage}\app\LICENSE
 
 [Languages]
