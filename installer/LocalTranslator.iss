@@ -107,6 +107,27 @@ begin
   end;
 end;
 
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Code: Integer;
+  Dirs: array of String;
+  I: Integer;
+  Path: String;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    Exit;
+  { [UninstallDelete] 가 못 지운 것 정리: PyTorch 처럼 경로가 아주 깊은 파일(260자 넘음)은
+    \\?\ 접두어를 붙인 rd 로만 지워진다 }
+  Dirs := ['venv', 'python', 'uv', 'uv-cache', 'app'];
+  for I := 0 to GetArrayLength(Dirs) - 1 do
+  begin
+    Path := ExpandConstant('{app}\') + Dirs[I];
+    if DirExists(Path) then
+      Exec(ExpandConstant('{cmd}'), '/c rd /s /q "\\?\' + Path + '"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  end;
+  RemoveDir(ExpandConstant('{app}'));
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Code: Integer;
