@@ -13,15 +13,17 @@
 - 디스크 여유 약 15GB (AI 라이브러리 약 6GB, 음성 인식 모델 약 4GB, Ollama + 번역 모델 약 8GB)
 
 ## 설치
-1. [Releases](https://github.com/glglekdy/local-translator/releases/latest) 에서 **`LocalTranslator-x.y.z.zip`** 을 받아 압축을 풀어요
-2. **`설치.bat`** 을 더블클릭해요
-   - "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행** 을 눌러요
-   - Python 과 앱이 `%LOCALAPPDATA%\LocalTranslator` 에 설치되고 (1~2분), 바탕화면에 바로가기가 생겨요
-3. 앱이 켜지면 **다운로드** 화면에서 **한 번에 모두 받기** 를 눌러요
+1. [Releases](https://github.com/glglekdy/local-translator/releases/latest) 에서 **`LocalTranslator-Setup-x.y.z.exe`** 를 받아 실행해요
+   - "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행** 을 눌러요 (서명하지 않은 오픈소스 프로그램이라 떠요)
+   - 관리자 권한 없이 `%LOCALAPPDATA%\LocalTranslator` 에 설치돼요. 마지막에 Python 과 기본 패키지를 받아요 (인터넷 필요, 1~3분)
+2. 설치가 끝나면 앱이 켜져요. **다운로드** 화면에서 **한 번에 모두 받기** 를 눌러요
    - 그래픽카드를 확인하고 AI 라이브러리 → 음성 인식 모델 → Ollama → 번역 모델을 차례로 받아요
    - 인터넷 속도에 따라 10~30분 걸려요. 처음 한 번만 하면 돼요
+3. 다음부터는 시작 메뉴나 바탕화면의 **로컬 번역기** 로 켜요
 
-압축을 푼 폴더는 설치가 끝나면 지워도 괜찮아요.
+지우려면 Windows **설정 > 앱 > 설치된 앱** 에서 **로컬 번역기 → 제거**.
+받아 둔 음성 인식 모델(`%USERPROFILE%\.cache\huggingface`)과 Ollama 는 다른 앱도 쓸 수 있어서 남겨 둬요.
+Ollama 도 지우려면 설치된 앱 목록에서 따로 제거해요.
 
 ## 쓰는 법
 1. **시스템 소리**(PC 에서 나는 소리) / **마이크** 고르기
@@ -66,14 +68,18 @@ uv pip install --python %PY% -r requirements.txt -r requirements-ai.txt pytest
 %USERPROFILE%\.venvs\local-translator\Scripts\python.exe -m pytest
 ```
 
-새 버전 내는 법:
+새 버전 내는 법 (Inno Setup 6 필요: `winget install JRSoftware.InnoSetup`):
 1. `lt/__init__.py` 의 `__version__` 을 올리고 커밋·푸시 (예: `1.1.0`)
-2. `gh release create v1.1.0 --title "1.1.0" --notes "바뀐 점"`
-   (zip 을 따로 안 올려도 GitHub 이 만든 소스 zip 으로 설치·업데이트돼요)
+2. `powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1` → `dist\` 에
+   `LocalTranslator-Setup-1.1.0.exe`(설치 프로그램)와 `LocalTranslator-1.1.0.zip`(앱 안 업데이트용)이 생겨요
+3. `gh release create v1.1.0 dist\LocalTranslator-Setup-1.1.0.exe dist\LocalTranslator-1.1.0.zip --title "로컬 번역기 1.1.0" --notes "바뀐 점"`
+   (앱의 업데이트는 릴리스의 zip 을 받아요. zip 은 꼭 하나만 올려요)
 
 ### 구조
 ```
-설치.bat, tools/install.ps1  설치: uv · Python · 기본 패키지 · 바로가기
+installer/                   설치 프로그램 (Inno Setup 스크립트, 실행 파일 LocalTranslator.exe 소스)
+tools/build_installer.ps1    릴리스 파일 만들기 → dist/
+tools/install.ps1            uv · Python · 기본 패키지 (설치 프로그램이 부름. 설치.bat 으로 직접도 가능)
 실행.bat                     개발용 실행
 app.py                       진입점
 requirements.txt             기본 패키지 (화면·소리)
