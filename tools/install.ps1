@@ -1,4 +1,4 @@
-﻿# 로컬 번역기 설치: Python 과 앱 화면에 필요한 패키지만 설치하고 앱을 켠다.
+﻿# 로컬 번역기 설치: Python 과 앱 화면에 필요한 패키지만 설치한다.
 # 무거운 AI(PyTorch·음성 인식·Ollama·번역 모델)는 앱의 '다운로드' 화면에서 받는다.
 #
 #   <뿌리>\app     이 앱 (업데이트도 여기에)
@@ -6,7 +6,10 @@
 #   <뿌리>\uv      uv.exe (파이썬·패키지 관리자)
 #   <뿌리>\python  uv 가 받은 Python
 #
-# <뿌리> 는 %LOCALAPPDATA%\LocalTranslator. 사용자 이름이 한글이면 C:\LocalTranslator
+# 두 가지로 쓰인다:
+#   - 설치 프로그램(LocalTranslator-Setup.exe)이 앱을 복사한 뒤 창 없이 부른다 (-NoShortcut -NoLaunch -LogFile)
+#   - 압축을 푼 폴더에서 설치.bat 으로 직접 (앱 복사 + 바로가기 + 실행까지)
+# <뿌리> 기본값은 %LOCALAPPDATA%\LocalTranslator. 사용자 이름이 한글이면 C:\LocalTranslator
 # (의존성 하나가 한글 경로에서 파일을 못 읽는다).
 #
 # 이 파일은 UTF-8 BOM 으로 저장해야 Windows PowerShell 5.1 이 한글을 바르게 읽는다.
@@ -14,7 +17,8 @@
 param(
     [string]$Root = "",
     [switch]$NoShortcut,
-    [switch]$NoLaunch
+    [switch]$NoLaunch,
+    [string]$LogFile = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,15 +27,33 @@ $ProgressPreference = "SilentlyContinue"     # Invoke-WebRequest 가 훨씬 빨�
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 
 $AppName = "로컬 번역기"
-$Src = Split-Path -Parent $PSScriptRoot      # tools\ 의 부모 = 받은 앱 폴더
+$Src = Split-Path -Parent $PSScriptRoot      # tools\ 의 부모 = 앱 폴더
 
-function Step($msg) { Write-Host ""; Write-Host "▶ $msg" -ForegroundColor Cyan }
-function Fail($msg) { Write-Host ""; Write-Host "✗ $msg" -ForegroundColor Red; exit 1 }
+function Say($msg, $color = "Gray") {
+    Write-Host $msg -ForegroundColor $color
+    if ($LogFile) { Add-Content -Path $LogFile -Value $msg -Encoding UTF8 }
+}
+function Step($msg) { Say ""; Say "▶ $msg" "Cyan" }
+function Fail($msg) { Say ""; Say "✗ $msg" "Red"; exit 1 }
 function IsAscii($s) { return $s -notmatch '[^\x00-\x7F]' }
-function Check($what) { if ($LASTEXITCODE -ne 0) { Fail "$what 에 실패했어요 (코드 $LASTEXITCODE). 인터넷 연결을 확인하고 다시 실행해 주세요" } }
 
-Write-Host "$AppName 설치" -ForegroundColor White
-Write-Host "Python 과 앱을 설치해요. AI 는 앱이 켜지면 '다운로드' 화면에서 받아요."
+# 외부 프로그램 실행. 기록 파일이 있으면 출력을 거기에 남긴다.
+# (PowerShell 5.1 은 외부 프로그램의 오류 출력을 돌려받으면 오류로 여겨 멈추므로, 여기서만 Continue)
+function Native([string]$Exe, [string[]]$ArgList) {
+    $ErrorActionPreference = "Continue"
+    if ($LogFile) {
+        & $Exe @ArgList 2>&1 | ForEach-Object { "$_" } | Add-Content -Path $LogFile -Encoding UTF8
+    } else {
+        & $Exe @ArgList | Out-Host
+    }
+}
+function Check($what) {
+    if ($LASTEXITCODE -ne 0) { Fail "$what 에 실패했어요 (코드 $LASTEXITCODE). 인터넷 연결을 확인하고 다시 실행해 주세요" }
+}
+
+if ($LogFile) { Set-Content -Path $LogFile -Value "$AppName 설치 기록 $(Get-Date -Format s)" -Encoding UTF8 }
+Say "$AppName 설치" "White"
+Say "Python 과 앱을 설치해요. AI 는 앱이 켜지면 '다운로드' 화면에서 받아요."
 
 if (-not $Root) {
     $Root = Join-Path $env:LOCALAPPDATA "LocalTranslator"
@@ -43,12 +65,12 @@ $Venv = Join-Path $Root "venv"
 $UvDir = Join-Path $Root "uv"
 $Uv = Join-Path $UvDir "uv.exe"
 New-Item -ItemType Directory -Force -Path $Root | Out-Null
-Write-Host "설치 폴더: $Root"
+Say "설치 폴더: $Root"
 
-# 1. 앱 복사 (내 설정 config.json 은 남겨 둔다)
-Step "앱 파일 복사"
+# 1. 앱 복사 (설치 프로그램이 이미 복사했으면 건너뜀. 내 설정 config.json 은 남겨 둔다)
 if ((Resolve-Path $Src).Path.TrimEnd('\') -ne $App.TrimEnd('\')) {
-    robocopy $Src $App /E /NFL /NDL /NJH /NJS /NP /XD .git __pycache__ .pytest_cache .update_backup venv .venv /XF config.json | Out-Null
+    Step "앱 파일 복사"
+    robocopy $Src $App /E /NFL /NDL /NJH /NJS /NP /XD .git __pycache__ .pytest_cache .update_backup venv .venv dist /XF config.json | Out-Null
     if ($LASTEXITCODE -ge 8) { Fail "앱 파일을 복사하지 못했어요 (robocopy $LASTEXITCODE)" }
 }
 
@@ -71,27 +93,27 @@ $env:UV_NO_PROGRESS = "1"
 
 # 3. Python + 가상환경
 Step "Python 3.12 설치"
-& $Uv python install 3.12
+Native $Uv @("python", "install", "3.12")
 Check "Python 설치"
 if (-not (Test-Path (Join-Path $Venv "Scripts\python.exe"))) {
-    & $Uv venv --python 3.12 $Venv
+    Native $Uv @("venv", "--python", "3.12", $Venv)
     Check "가상환경 만들기"
 }
 
 # 4. 기본 패키지 (화면·소리)
 Step "기본 패키지 설치 (1~2분)"
-& $Uv pip install --python $Venv -r (Join-Path $App "requirements.txt")
+Native $Uv @("pip", "install", "--python", $Venv, "-r", (Join-Path $App "requirements.txt"))
 Check "패키지 설치"
 
 $Pyw = Join-Path $Venv "Scripts\pythonw.exe"
 $Main = Join-Path $App "app.py"
 $Icon = Join-Path $App "lt\assets\icon.ico"
 
-# 5. 바로가기 (바탕화면 + 시작 메뉴)
+# 5. 바로가기 (바탕화면 + 시작 메뉴). 설치 프로그램으로 설치하면 설치 프로그램이 만든다
 if (-not $NoShortcut) {
     Step "바로가기 만들기"
     $shell = New-Object -ComObject WScript.Shell
-    $places = @([Environment]::GetFolderPath("Desktop"), (Join-Path ([Environment]::GetFolderPath("Programs")) ""))
+    $places = @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))
     foreach ($dir in $places) {
         $lnk = $shell.CreateShortcut((Join-Path $dir "$AppName.lnk"))
         $lnk.TargetPath = $Pyw
@@ -103,9 +125,9 @@ if (-not $NoShortcut) {
     }
 }
 
-Write-Host ""
-Write-Host "✓ 설치했어요. 바탕화면의 '$AppName' 바로가기로 켤 수 있어요." -ForegroundColor Green
-Write-Host "  앱이 켜지면 '다운로드' 화면에서 AI 를 받아 주세요."
+Say ""
+Say "✓ 설치했어요." "Green"
+if (-not $NoShortcut) { Say "  바탕화면의 '$AppName' 바로가기로 켤 수 있어요. 앱이 켜지면 '다운로드' 화면에서 AI 를 받아 주세요." }
 
 if (-not $NoLaunch) { Start-Process $Pyw -ArgumentList "`"$Main`"" -WorkingDirectory $App }
 exit 0

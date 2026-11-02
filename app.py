@@ -13,7 +13,17 @@ from lt import NAME, engine, setup_ai, theme  # noqa: E402
 from lt.main_window import MainWindow  # noqa: E402
 
 
+APP_USER_MODEL_ID = "LocalTranslator.App"   # 설치 프로그램의 바로가기와 같은 값 (installer/LocalTranslator.iss)
+
+
 def main() -> None:
+    if sys.platform == "win32":
+        # 작업 표시줄이 python 이 아니라 이 앱으로 묶고, 고정하면 바로가기(LocalTranslator.exe)로 다시 켜게
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+        except (AttributeError, OSError):
+            pass
     app = QApplication(sys.argv)
     app.setApplicationName(NAME)
     app.setWindowIcon(QIcon(str(theme.ASSETS / "icon.svg")))

@@ -6,3 +6,5 @@ __pycache__/
 .pytest_cache/
 # 업데이트 뒤 다음 실행 때 패키지를 맞추라는 표시
 .sync_requirements
+# 빌드 결과 (tools/build_installer.ps1)
+dist/
