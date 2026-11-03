@@ -87,6 +87,8 @@ DEFAULT_CONFIG = {
     "subtitle_hide_sec": 8,       # 말이 없으면 몇 초 뒤 사라질지 (0 = 계속 보이기)
     "subtitle_max_lines": 4,      # 한 번에 쌓이는 말 수. 넘치면 오래된 말부터 사라진다
     "subtitle_pos": None,         # [가운데 x, 아래 y]. None = 화면 아래 가운데
+    "obs_enabled": False,         # OBS 브라우저 소스로 자막 보내기 (http://127.0.0.1:obs_port/)
+    "obs_port": 17321,
     # 배경 정보: 번역 프롬프트와 음성 인식 힌트에 들어간다
     "glossary": "",               # 한 줄에 하나: '원어 = 번역어'
     "background": "",             # 방송·캐릭터·세계관 설명

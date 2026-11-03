@@ -20,6 +20,7 @@ from PySide6.QtCore import QProcess
 from PySide6.QtWidgets import QApplication
 
 from . import NAME, __version__, engine, theme, updater
+from .obs import ObsServer
 from .pipeline import Pipeline
 from .download_page import DownloadPage
 from .settings_pages import PAGES, SettingsModel
@@ -134,12 +135,14 @@ class MainWindow(QMainWindow):
         self._retired: list[Pipeline] = []   # 멈추는 중인 이전 파이프라인
         self.cards: dict[int, UtteranceCard] = {}
         self.subtitle: SubtitleWindow | None = None
+        self.obs: ObsServer | None = None       # OBS 브라우저 소스로 보내는 서버
         self._quitting = False
         self._setup_prompted = False
         self._build_ui()
         self._sync()
         if self.model.value["subtitle_enabled"]:   # 지난번에 켜 두고 닫았으면 다시 켠다
             self.set_subtitle(True)
+        self._apply_obs()
 
     # ---------- 화면 ----------
     def _build_ui(self) -> None:
@@ -315,6 +318,10 @@ class MainWindow(QMainWindow):
             self.subtitle.apply_cfg(cfg)
             if "subtitle_pos" in keys:
                 self.subtitle.place()
+        if keys & {"obs_enabled", "obs_port"}:
+            self._apply_obs()
+        elif self.obs is not None and any(k.startswith("subtitle_") for k in keys):
+            self.obs.apply_cfg(cfg)
         for page in self.pages.values():
             if hasattr(page, "load") and page.isHidden():
                 page.load(cfg)
@@ -439,6 +446,29 @@ class MainWindow(QMainWindow):
         if not self._quitting:                      # 앱을 닫느라 같이 닫힌 건 '끔'으로 치지 않는다
             self.model.update(subtitle_enabled=False)
 
+    # ---------- OBS ----------
+    def _apply_obs(self) -> None:
+        """설정대로 OBS 서버를 켜고 끈다. 포트가 바뀌면 다시 연다."""
+        cfg = self.model.value
+        want = bool(cfg["obs_enabled"])
+        port = int(cfg["obs_port"])
+        if self.obs is not None and (not want or self.obs.port != port):
+            self.obs.stop()
+            self.obs = None
+        page = self.pages["subtitle"]
+        if not want:
+            page.set_obs_state("", "")
+            return
+        if self.obs is None:
+            srv = ObsServer(cfg, port)
+            try:
+                srv.start()
+            except OSError:
+                page.set_obs_state("error", f"{port} 번 포트를 열 수 없어요. 다른 프로그램이 쓰고 있으면 포트를 바꿔 주세요")
+                return
+            self.obs = srv
+        page.set_obs_state("ok", "✓ 보내는 중이에요. OBS 에서 아래 주소를 브라우저 소스로 추가하세요")
+
     # ---------- 카드 ----------
     def _on_heard(self, uid: int, lang: str, text: str) -> None:
         self.empty.hide()
@@ -450,18 +480,24 @@ class MainWindow(QMainWindow):
         self.cards[uid] = card
         if self.subtitle is not None:
             self.subtitle.show_source(uid, lang, text)
+        if self.obs is not None:
+            self.obs.show_source(uid, text)
 
     def _on_translated(self, uid: int, text: str) -> None:
         if uid in self.cards:
             self.cards[uid].set_translation(text)
             if self.subtitle is not None:
                 self.subtitle.show_translation(uid, self.cards[uid].source_text, text)
+            if self.obs is not None:
+                self.obs.show_translation(uid, self.cards[uid].source_text, text)
 
     def _on_failed(self, uid: int, msg: str) -> None:
         if uid in self.cards:
             self.cards[uid].set_failed(msg)
             if self.subtitle is not None:
                 self.subtitle.show_failed(uid, self.cards[uid].source_text, msg)
+            if self.obs is not None:
+                self.obs.show_failed(uid)
 
     def clear(self) -> None:
         for card in self.cards.values():
@@ -497,6 +533,9 @@ class MainWindow(QMainWindow):
         self._quitting = True
         if self.subtitle is not None:
             self.subtitle.close()
+        if self.obs is not None:
+            self.obs.stop()
+            self.obs = None
         self.stop()
         for p in list(self._retired):
             p.wait(3000)

@@ -9,12 +9,13 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
     QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
 )
 
-from . import __version__, engine, updater
+from . import __version__, engine, obs, updater
 
 
 class SettingsModel(QObject):
@@ -440,7 +441,7 @@ class EnginePage(SettingsPage):
 class SubtitlePage(SettingsPage):
     title = "자막"
     description = ("번역 화면의 '자막 모드'를 켜면 화면 아래에 하프라이프 자막처럼 말이 한 줄씩 쌓여요. "
-                   "자막은 끌어서 옮길 수 있어요.")
+                   "자막은 끌어서 옮길 수 있어요. OBS 에 자막만 넣을 수도 있어요.")
 
     def _build(self) -> None:
         self.enabled = QCheckBox("자막 켜기")
@@ -473,6 +474,37 @@ class SubtitlePage(SettingsPage):
         self.reset_btn = QPushButton("화면 아래 가운데로")
         self.reset_btn.clicked.connect(lambda: self.commit(subtitle_pos=None))
 
+        self.obs_enabled = QCheckBox("OBS 에 자막 보내기")
+        self.obs_enabled.toggled.connect(lambda on: self.commit(obs_enabled=on))
+        self.obs_state = QLabel("")
+        self.obs_state.setObjectName("testResult")
+        self.obs_state.setWordWrap(True)
+        self.obs_state.hide()
+        obs_box = QWidget()
+        obs_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)   # 안내 글이 줄바꿈되게
+        col = QVBoxLayout(obs_box)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(6)
+        col.addWidget(self.obs_enabled)
+        col.addWidget(self.obs_state)
+        url_row = QWidget()
+        url_row.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        box = QHBoxLayout(url_row)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(6)
+        self.obs_url = QLineEdit()
+        self.obs_url.setReadOnly(True)
+        box.addWidget(self.obs_url, 1)
+        self.copy_url = QPushButton("복사")
+        self.copy_url.setObjectName("ghost")
+        self.copy_url.clicked.connect(self._copy_url)
+        box.addWidget(self.copy_url)
+        self.obs_port = QSpinBox()
+        self.obs_port.setRange(1024, 65535)
+        self.obs_port.setKeyboardTracking(False)      # 다 친 뒤에만 (한 글자마다 서버를 다시 열지 않게)
+        self.obs_port.setFixedWidth(110)
+        self.obs_port.valueChanged.connect(lambda v: self.commit(obs_port=v))
+
         self._row("자막", self.enabled, "번역 화면의 '자막 모드' 버튼과 같아요. 켜 두면 다음에 앱을 열 때도 켜져 있어요")
         self._row("글자 크기", self.font_size, "자막 위에서 오른쪽 클릭해도 바꿀 수 있어요")
         self._row("", self.original)
@@ -480,6 +512,11 @@ class SubtitlePage(SettingsPage):
         self._row("사라지는 시간", self.hide_sec, "번역이 나온 뒤 이만큼 지나면 스르륵 사라지고 상자가 줄어들어요. 번역을 기다리는 동안은 남아 있고, 긴 문장은 조금 더 오래 보여요")
         self._row("쌓이는 말 수", self.max_lines, "이보다 많아지면 가장 오래된 말부터 사라져요. 1 개면 한 줄씩 바뀌어요")
         self._row("위치", self.reset_btn, "자막을 끌어서 옮기면 그 자리를 기억해요")
+        self._row("OBS", obs_box, "방송 화면에 자막만 넣어요. 배경은 투명하고, 모양은 위 설정을 그대로 따라요. "
+                                  "화면의 자막 창은 꺼 둬도 돼요")
+        self._row("주소", url_row, "OBS › 소스 + › 브라우저 › URL 에 붙여 넣고 너비 1920, 높이 1080 으로 두세요. "
+                                  "자막은 아래 가운데에 나와요")
+        self._row("포트", self.obs_port, "다른 프로그램이 이 포트를 쓰고 있으면 바꿔 주세요")
 
     def _fill(self, cfg: dict) -> None:
         self.enabled.setChecked(bool(cfg["subtitle_enabled"]))
@@ -488,6 +525,25 @@ class SubtitlePage(SettingsPage):
         self.opacity.setValue(int(cfg["subtitle_opacity"]))
         self.hide_sec.setValue(int(cfg["subtitle_hide_sec"]))
         self.max_lines.setValue(int(cfg["subtitle_max_lines"]))
+        self.obs_enabled.setChecked(bool(cfg["obs_enabled"]))
+        self.obs_port.setValue(int(cfg["obs_port"]))
+        self.obs_url.setText(obs.url(int(cfg["obs_port"])))
+
+    def _refresh(self) -> None:
+        self.obs_url.setText(obs.url(self.obs_port.value()))
+
+    def _copy_url(self) -> None:
+        QGuiApplication.clipboard().setText(self.obs_url.text())
+        self.copy_url.setText("✓ 복사함")
+        QTimer.singleShot(1500, self.copy_url, lambda: self.copy_url.setText("복사"))
+
+    def set_obs_state(self, state: str, text: str) -> None:
+        """OBS 서버가 열렸는지 (앱이 알려 준다). 빈 글이면 숨긴다."""
+        self.obs_state.setProperty("state", state)
+        self.obs_state.setText(text)
+        self.obs_state.setVisible(bool(text))
+        self.obs_state.style().unpolish(self.obs_state)
+        self.obs_state.style().polish(self.obs_state)
 
 
 GLOSSARY_EXAMPLE = "한 줄에 하나씩: 원어 = 번역어\n('= 번역어'를 빼면 원어 그대로 둬요)"
